@@ -3,7 +3,7 @@
 
 version: "1.0"
 dataset: "kb_chunk_export"
-owner_team: "__TODO__"
+owner_team: "AI-IT-Support-Team"
 
 schema_cleaned:
   chunk_id:
@@ -32,11 +32,17 @@ quality_rules:
   - id: "no_stale_refund_window"
     description: "Không được để chunk policy refund chứa cửa sổ 14 ngày (lệch so với v4 = 7 ngày)"
     severity: "halt"
+  - id: "no_unmasked_external_emails"
+    description: "Không được để lộ email bên ngoài không thuộc domain công ty"
+    severity: "warn"
+  - id: "no_future_effective_date"
+    description: "Không cho phép ngày hiệu lực xa ở tương lai (vượt quá 2027-12-31)"
+    severity: "halt"
 
 freshness:
   measured_at: "publish"  # ingest | cleaned | publish
   sla_hours: 24
-  alert_channel: "__TODO__"
+  alert_channel: "#incident-p1-alerts"
 
 canonical_sources:
   - path: "data/docs/policy_refund_v4.txt"

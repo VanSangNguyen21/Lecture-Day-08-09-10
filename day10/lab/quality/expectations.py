@@ -2,6 +2,7 @@
 Expectation suite đơn giản (không bắt buộc Great Expectations).
 
 Sinh viên có thể thay bằng GE / pydantic / custom — miễn là có halt có kiểm soát.
+Nhóm thêm ≥2 expectation mới: khai báo rõ expectation nào halt vs warn.
 """
 
 from __future__ import annotations
@@ -109,6 +110,42 @@ def run_expectations(cleaned_rows: List[Dict[str, Any]]) -> Tuple[List[Expectati
             ok6,
             "halt",
             f"violations={len(bad_hr_annual)}",
+        )
+    )
+
+    # [Expectation mới E7] no_unmasked_external_emails (severity: warn)
+    # Kiểm tra xem có email nào không phải là email nội bộ (@company.internal) mà chưa được che giấu
+    unmasked_emails = []
+    for r in cleaned_rows:
+        text = r.get("chunk_text") or ""
+        emails = re.findall(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b", text)
+        for email in emails:
+            if not email.lower().endswith("@company.internal"):
+                unmasked_emails.append((r.get("chunk_id"), email))
+    ok7 = len(unmasked_emails) == 0
+    results.append(
+        ExpectationResult(
+            "no_unmasked_external_emails",
+            ok7,
+            "warn",
+            f"unmasked_external_emails={len(unmasked_emails)}: {unmasked_emails}",
+        )
+    )
+
+    # [Expectation mới E8] no_future_effective_date (severity: halt)
+    # Kiểm tra xem ngày hiệu lực có nằm ở tương lai xa hay không (vd: lớn hơn ngày 2027-12-31)
+    future_rows = []
+    for r in cleaned_rows:
+        eff = r.get("effective_date") or ""
+        if eff > "2027-12-31":
+            future_rows.append(r.get("chunk_id"))
+    ok8 = len(future_rows) == 0
+    results.append(
+        ExpectationResult(
+            "no_future_effective_date",
+            ok8,
+            "halt",
+            f"future_effective_dates={len(future_rows)}: {future_rows}",
         )
     )
 

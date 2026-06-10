@@ -10,8 +10,12 @@ from __future__ import annotations
 import csv
 import hashlib
 import re
+import os
+import yaml
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
+from datetime import date, datetime
+from pydantic import BaseModel, Field, field_validator
 
 # Khớp export hợp lệ trong lab (mở rộng khi nhóm thêm doc mới — phải đồng bộ contract).
 ALLOWED_DOC_IDS = frozenset(
@@ -25,6 +29,22 @@ ALLOWED_DOC_IDS = frozenset(
 
 _ISO_DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 _DMY_SLASH = re.compile(r"^(\d{2})/(\d{2})/(\d{4})$")
+
+
+# Pydantic Model for Schema Validation (Distinction / Bonus Feature)
+class CleanedRow(BaseModel):
+    chunk_id: str
+    doc_id: str
+    chunk_text: str = Field(min_length=8)
+    effective_date: date
+    exported_at: datetime
+
+    @field_validator("doc_id")
+    @classmethod
+    def validate_doc_id(cls, v: str) -> str:
+        if v not in ALLOWED_DOC_IDS:
+            raise ValueError(f"doc_id '{v}' is not in allowed list")
+        return v
 
 
 def _norm_text(s: str) -> str:
@@ -53,6 +73,63 @@ def _normalize_effective_date(raw: str) -> Tuple[str, str]:
     return "", "invalid_effective_date_format"
 
 
+def _get_hr_leave_cutoff() -> str:
+    """
+    [Rule mới 1] Dynamic versioning cutoff: Đọc từ data_contract.yaml hoặc environment variable.
+    """
+    # Đọc từ environment variable trước
+    env_cutoff = os.environ.get("HR_LEAVE_MIN_EFFECTIVE_DATE")
+    if env_cutoff:
+        return env_cutoff.strip()
+    
+    # Fallback load từ data_contract.yaml
+    try:
+        contract_path = Path(__file__).resolve().parent.parent / "contracts" / "data_contract.yaml"
+        if contract_path.is_file():
+            with contract_path.open("r", encoding="utf-8") as f:
+                data = yaml.safe_load(f)
+                cutoff = data.get("policy_versioning", {}).get("hr_leave_min_effective_date")
+                if cutoff:
+                    return str(cutoff).strip()
+    except Exception:
+        pass
+    return "2026-01-01"
+
+
+def _mask_pii_entities(text: str) -> str:
+    """
+    [Rule mới 2] PII Masking: Che giấu email và số điện thoại không hợp lệ.
+    """
+    # Che email không thuộc hệ thống nội bộ (@company.internal)
+    def email_repl(match):
+        email = match.group(0)
+        if email.lower().endswith("@company.internal"):
+            return email
+        return "[MASKED_EMAIL]"
+    
+    text = re.sub(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b", email_repl, text)
+    
+    # Che số điện thoại chung (10 số bắt đầu bằng 0), cho phép ext. 2000
+    text = re.sub(r"\b0\d{9}\b", "[MASKED_PHONE]", text)
+    return text
+
+
+def _validate_content_integrity(doc_id: str, text: str) -> Tuple[bool, str]:
+    """
+    [Rule mới 3] Content Integrity Validation: Đảm bảo nội dung chunk khớp với tài liệu.
+    """
+    text_lower = text.lower()
+    if doc_id == "policy_refund_v4":
+        keywords = ["hoàn tiền", "refund", "trả lại", "đơn hàng", "yêu cầu"]
+        if not any(k in text_lower for k in keywords):
+            return False, "refund_policy_content_mismatch"
+    elif doc_id == "sla_p1_2026":
+        keywords = ["sla", "phản hồi", "response", "xử lý", "ticket", "sự cố"]
+        if not any(k in text_lower for k in keywords):
+            return False, "sla_policy_content_mismatch"
+    return True, ""
+
+
 def load_raw_csv(path: Path) -> List[Dict[str, str]]:
     rows: List[Dict[str, str]] = []
     with path.open(encoding="utf-8", newline="") as f:
@@ -69,19 +146,13 @@ def clean_rows(
 ) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
     """
     Trả về (cleaned, quarantine).
-
-    Baseline (mở rộng theo narrative Day 10):
-    1) Quarantine: doc_id không thuộc allowlist (export lạ / catalog sai).
-    2) Chuẩn hoá effective_date sang YYYY-MM-DD; quarantine nếu không parse được.
-    3) Quarantine: chunk hr_leave_policy có effective_date < 2026-01-01 (bản HR cũ / conflict version).
-    4) Quarantine: chunk_text rỗng hoặc effective_date rỗng sau chuẩn hoá.
-    5) Loại trùng nội dung chunk_text (giữ bản đầu).
-    6) Fix stale refund: policy_refund_v4 chứa '14 ngày làm việc' → 7 ngày.
     """
     quarantine: List[Dict[str, Any]] = []
     seen_text: set[str] = set()
     cleaned: List[Dict[str, Any]] = []
     seq = 0
+
+    hr_cutoff = _get_hr_leave_cutoff()
 
     for raw in rows:
         doc_id = raw.get("doc_id", "")
@@ -89,10 +160,12 @@ def clean_rows(
         eff_raw = raw.get("effective_date", "")
         exported_at = raw.get("exported_at", "")
 
+        # 1) Quarantine: doc_id check (baseline)
         if doc_id not in ALLOWED_DOC_IDS:
             quarantine.append({**raw, "reason": "unknown_doc_id"})
             continue
 
+        # 2) Normalize effective_date (baseline)
         eff_norm, eff_err = _normalize_effective_date(eff_raw)
         if eff_err == "empty_effective_date":
             quarantine.append({**raw, "reason": "missing_effective_date"})
@@ -101,27 +174,44 @@ def clean_rows(
             quarantine.append({**raw, "reason": eff_err, "effective_date_raw": eff_raw})
             continue
 
-        if doc_id == "hr_leave_policy" and eff_norm < "2026-01-01":
+        # 3) Quarantine: stale HR policy using dynamic cutoff (Rule 1 / baseline)
+        if doc_id == "hr_leave_policy" and eff_norm < hr_cutoff:
             quarantine.append(
                 {
                     **raw,
                     "reason": "stale_hr_policy_effective_date",
                     "effective_date_normalized": eff_norm,
+                    "cutoff_used": hr_cutoff,
                 }
             )
             continue
 
+        # 4) Quarantine: missing text check (baseline)
         if not text:
             quarantine.append({**raw, "reason": "missing_chunk_text"})
             continue
 
-        key = _norm_text(text)
+        # 5) Content integrity validation (Rule 3)
+        integrity_ok, integrity_reason = _validate_content_integrity(doc_id, text)
+        if not integrity_ok:
+            quarantine.append({**raw, "reason": integrity_reason})
+            continue
+
+        # 6) Text normalization
+        norm_text_content = " ".join(text.strip().split())
+        
+        # 7) PII masking (Rule 2)
+        norm_text_content = _mask_pii_entities(norm_text_content)
+
+        # 8) Deduplication check (baseline)
+        key = _norm_text(norm_text_content)
         if key in seen_text:
             quarantine.append({**raw, "reason": "duplicate_chunk_text"})
             continue
         seen_text.add(key)
 
-        fixed_text = text
+        # 9) Fix stale refund window (baseline)
+        fixed_text = norm_text_content
         if apply_refund_window_fix and doc_id == "policy_refund_v4":
             if "14 ngày làm việc" in fixed_text:
                 fixed_text = fixed_text.replace(
@@ -130,16 +220,32 @@ def clean_rows(
                 )
                 fixed_text += " [cleaned: stale_refund_window]"
 
-        seq += 1
-        cleaned.append(
-            {
-                "chunk_id": _stable_chunk_id(doc_id, fixed_text, seq),
-                "doc_id": doc_id,
-                "chunk_text": fixed_text,
-                "effective_date": eff_norm,
-                "exported_at": exported_at or "",
-            }
-        )
+        # 10) Pydantic validation gate (Distinction / Bonus Feature)
+        try:
+            chunk_id_cand = _stable_chunk_id(doc_id, fixed_text, seq + 1)
+            
+            validated = CleanedRow(
+                chunk_id=chunk_id_cand,
+                doc_id=doc_id,
+                chunk_text=fixed_text,
+                effective_date=eff_norm,
+                exported_at=exported_at or datetime.now().isoformat()
+            )
+            
+            seq += 1
+            cleaned.append({
+                "chunk_id": validated.chunk_id,
+                "doc_id": validated.doc_id,
+                "chunk_text": validated.chunk_text,
+                "effective_date": validated.effective_date.isoformat(),
+                "exported_at": validated.exported_at.isoformat(),
+            })
+        except Exception as pyd_err:
+            quarantine.append({
+                **raw,
+                "reason": f"pydantic_schema_validation_failed: {str(pyd_err)}"
+            })
+            continue
 
     return cleaned, quarantine
 
