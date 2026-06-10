@@ -1,8 +1,8 @@
 """
 Cleaning rules — raw export → cleaned rows + quarantine.
 
-Baseline gồm các failure mode mở rộng (allowlist doc_id, parse ngày, HR stale version).
-Sinh viên thêm ≥3 rule mới: mỗi rule phải ghi `metric_impact` (xem README — chống trivial).
+Triển khai các quy tắc làm sạch dữ liệu: allowlist doc_id, parse ngày tháng, 
+xử lý stale version (refund window, HR leave policy) và PII masking.
 """
 
 from __future__ import annotations

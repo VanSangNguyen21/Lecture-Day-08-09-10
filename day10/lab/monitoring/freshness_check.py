@@ -1,7 +1,8 @@
 """
-Kiểm tra freshness từ manifest pipeline (SLA đơn giản theo giờ).
+Kiểm tra freshness từ manifest pipeline (SLA giám sát dữ liệu cũ).
 
-Sinh viên mở rộng: đọc watermark DB, so sánh với clock batch, v.v.
+Đảm bảo dữ liệu trong Vector Store luôn đạt yêu cầu về độ tươi (Freshness SLA)
+bằng cách so sánh thời điểm xuất dữ liệu với thời điểm hiện tại.
 """
 
 from __future__ import annotations

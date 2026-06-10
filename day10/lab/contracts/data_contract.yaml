@@ -1,5 +1,5 @@
-# Data contract — Lab Day 10 (tiếp nối artifact CS + IT Helpdesk)
-# Sinh viên bổ sung owner, SLA freshness, và nguồn canonical.
+# Data contract — Lab Day 10 (Hợp đồng dữ liệu tri thức CS + IT Helpdesk)
+# Đặc tả các quy tắc về Schema, Quality, Freshness và Canonical Sources.
 
 version: "1.0"
 dataset: "kb_chunk_export"

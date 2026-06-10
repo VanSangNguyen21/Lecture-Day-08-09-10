@@ -1,8 +1,8 @@
 """
-Expectation suite đơn giản (không bắt buộc Great Expectations).
+Expectation suite — Kiểm tra chất lượng dữ liệu sau layer transform.
 
-Sinh viên có thể thay bằng GE / pydantic / custom — miễn là có halt có kiểm soát.
-Nhóm thêm ≥2 expectation mới: khai báo rõ expectation nào halt vs warn.
+Định nghĩa các bộ kiểm tra chất lượng (Expectations) nhằm phát hiện sớm các lỗi
+nghiệp vụ nghiêm trọng (halt) hoặc các cảnh báo định dạng (warn).
 """
 
 from __future__ import annotations
