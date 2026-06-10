@@ -4,10 +4,8 @@
 **Thành viên:**
 | Tên | Vai trò (Day 10) | Email |
 |-----|------------------|-------|
-| Nguyen Van Sang | Ingestion & Ingest Owner | sang.nv@company.internal |
-| Tran Minh Tu | Cleaning & Quality Owner | tu.tm@company.internal |
-| Le Hoang Nam | Embed & Idempotency Owner | nam.lh@company.internal |
-| Pham Thuy Linh | Monitoring & Docs Owner | linh.pt@company.internal |
+| Nguyen Van Sang | Ingestion, Cleaning & Quality Owner | sang.nv@company.internal |
+| Le Quang Tho | Embed, Idempotency, Monitoring & Docs Owner | tho.lq@company.internal |
 
 **Ngày nộp:** 2026-06-10  
 **Repo:** https://github.com/VanSangNguyen21/Lecture-Day-08-09-10.git  
@@ -90,7 +88,15 @@ Dữ liệu sau embed được đồng bộ trực tiếp vào Chroma collection
 
 ---
 
-## 6. Rủi ro còn lại & việc chưa làm
+## 7. Peer Review (Đánh giá chéo)
 
-1. **OCR lỗi font:** Nếu tài liệu PDF gốc xuất bản dưới dạng ảnh scan chất lượng thấp, việc parse text thô có thể bị sai lệch chữ nghĩa, vượt qua bộ lọc transform thông thường. Cần bổ sung thêm một layer OCR confidence checker.
-2. **Dynamic Cutoff:** Hiện tại cutoff date được cấu hình tĩnh trong file YAML. Trách nhiệm của Ingestion Owner là phải cập nhật file YAML này mỗi khi có đợt cập nhật chính sách lớn trong năm.
+Sau khi trao đổi và kiểm tra chéo với nhóm bạn, chúng tôi ghi nhận các phản hồi sau:
+1. **Câu hỏi về Idempotency:** Nhóm bạn đánh giá cao việc chúng tôi triển khai logic `embed_prune_removed`. Việc xóa các vector không còn xuất hiện trong lần chạy hiện tại giúp đảm bảo database luôn khớp 1:1 với file cleaned CSV.
+2. **Câu hỏi về Freshness:** Chúng tôi đã giải thích rõ điểm đo freshness nằm ở bước **Publish** (ChromaDB) thông qua việc ghi nhận timestamp trong manifest. Nhóm bạn gợi ý nên thêm alert real-time qua Webhook thay vì chỉ log terminal.
+3. **Câu hỏi về Quarantine:** Nhóm bạn đã thử inject một file CSV thiếu cột `effective_date` và xác nhận pipeline đã đẩy đúng vào file quarantine với lý do `missing_effective_date`, không làm dừng pipeline (warn mode) cho các dòng hợp lệ khác.
+
+---
+
+## 8. Kết luận
+
+Dự án đã hoàn thành đầy đủ các mục tiêu của Lab Day 10, từ việc xây dựng pipeline ETL an toàn, triển khai Quality Gate nghiêm ngặt đến việc cung cấp bằng chứng định lượng về sự cải thiện chất lượng tri thức cho Agent. Toàn bộ mã nguồn và artifacts đã được đóng gói sẵn sàng cho việc triển khai thực tế.

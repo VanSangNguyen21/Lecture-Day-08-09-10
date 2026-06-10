@@ -39,11 +39,11 @@ graph TD
 
 | Thành phần | Input | Output | Owner nhóm |
 |------------|-------|--------|--------------|
-| **Ingest** | `data/raw/policy_export_dirty.csv` | CSV rows, mapped column structures | Ingestion / Raw Owner |
-| **Transform** | Raw CSV rows | Cleaned CSV rows + Quarantine rows (PII masked, refund window fixed) | Cleaning & Quality Owner |
-| **Quality** | Cleaned CSV rows | Expectation results (HALT or WARN decisions) | Cleaning & Quality Owner |
-| **Embed** | Cleaned CSV rows | Updated ChromaDB collection (`day10_kb`), pruning stale vectors | Embed & Idempotency Owner |
-| **Monitor** | Pipeline run manifest | Freshness SLI/SLA status & alert signals | Monitoring / Docs Owner |
+| **Ingest** | `data/raw/policy_export_dirty.csv` | CSV rows, mapped column structures | Nguyen Van Sang |
+| **Transform** | Raw CSV rows | Cleaned CSV rows + Quarantine rows (PII masked, refund window fixed) | Nguyen Van Sang |
+| **Quality** | Cleaned CSV rows | Expectation results (HALT or WARN decisions) | Nguyen Van Sang |
+| **Embed** | Cleaned CSV rows | Updated ChromaDB collection (`day10_kb`), pruning stale vectors | Le Quang Tho |
+| **Monitor** | Pipeline run manifest | Freshness SLI/SLA status & alert signals | Le Quang Tho |
 
 ---
 
